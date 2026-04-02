@@ -1,0 +1,7 @@
+{
+  "name": "LG U+ USIM Status Tracker",
+  "description": "Check real-time USIM inventory and waiting times at LG U+ stores for updates and replacements.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}

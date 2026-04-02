@@ -1,0 +1,114 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: stores
+    // Document ID: storeId
+    // Fields:
+    //   - id: string (required) - Unique identifier for the store.
+    //   - name: string (required) - Name of the store.
+    //   - address: string (required) - Physical address of the store.
+    //   - businessHours: string (required) - Operating hours of the store.
+    //   - phoneNumber: string (required) - Contact phone number.
+    //   - usimStock: int (required) - Current number of USIM cards in stock.
+    //   - waitingCount: int (required) - Current number of customers waiting for service.
+    //   - lat: float (required) - Latitude coordinate of the store.
+    //   - lng: float (required) - Longitude coordinate of the store.
+    //
+    // Collection: notices
+    // Document ID: noticeId
+    // Fields:
+    //   - id: string (required) - Unique identifier for the notice.
+    //   - title: string (required) - Title of the notice.
+    //   - content: string (required) - Content of the notice.
+    //   - createdAt: string (required) - ISO 8601 date string.
+    //   - author: string (required) - Author of the notice.
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (request.auth.token.email == "manokey77@gmail.com" && request.auth.token.email_verified == true);
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidStore(data) {
+      return data.id is string &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.address is string && data.address.size() > 0 && data.address.size() < 200 &&
+             data.businessHours is string && data.businessHours.size() > 0 && data.businessHours.size() < 100 &&
+             data.phoneNumber is string && data.phoneNumber.size() > 0 && data.phoneNumber.size() < 50 &&
+             data.usimStock is int && data.usimStock >= 0 &&
+             data.waitingCount is int && data.waitingCount >= 0 &&
+             data.lat is number &&
+             data.lng is number;
+    }
+
+    function isValidNotice(data) {
+      return data.id is string &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.content is string && data.content.size() > 0 && data.content.size() < 5000 &&
+             data.createdAt is string &&
+             data.author is string;
+    }
+
+    match /stores/{storeId} {
+      // Public read access for all users
+      allow read: if true;
+
+      // Admin only write access
+      allow create: if isAdmin() && 
+                      hasRequiredFields(['id', 'name', 'address', 'businessHours', 'phoneNumber', 'usimStock', 'waitingCount', 'lat', 'lng']) &&
+                      hasOnlyAllowedFields(['id', 'name', 'address', 'businessHours', 'phoneNumber', 'usimStock', 'waitingCount', 'lat', 'lng']) &&
+                      isValidStore(request.resource.data);
+      
+      allow update: if isAdmin() && 
+                      hasRequiredFields(['id', 'name', 'address', 'businessHours', 'phoneNumber', 'usimStock', 'waitingCount', 'lat', 'lng']) &&
+                      hasOnlyAllowedFields(['id', 'name', 'address', 'businessHours', 'phoneNumber', 'usimStock', 'waitingCount', 'lat', 'lng']) &&
+                      isValidStore(request.resource.data);
+      
+      allow delete: if isAdmin();
+    }
+
+    match /notices/{noticeId} {
+      // Public read access for all users
+      allow read: if true;
+
+      // Admin only write access
+      allow create: if isAdmin() && 
+                      hasRequiredFields(['id', 'title', 'content', 'createdAt', 'author']) &&
+                      hasOnlyAllowedFields(['id', 'title', 'content', 'createdAt', 'author']) &&
+                      isValidNotice(request.resource.data);
+      
+      allow update: if isAdmin() && 
+                      hasRequiredFields(['id', 'title', 'content', 'createdAt', 'author']) &&
+                      hasOnlyAllowedFields(['id', 'title', 'content', 'createdAt', 'author']) &&
+                      isValidNotice(request.resource.data);
+      
+      allow delete: if isAdmin();
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

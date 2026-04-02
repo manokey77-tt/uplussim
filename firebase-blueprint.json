@@ -1,0 +1,44 @@
+{
+  "entities": {
+    "Store": {
+      "title": "Store",
+      "description": "Information about an LG U+ store, its USIM stock, and waiting customers.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the store." },
+        "name": { "type": "string", "description": "Name of the store." },
+        "address": { "type": "string", "description": "Physical address of the store." },
+        "businessHours": { "type": "string", "description": "Operating hours of the store." },
+        "phoneNumber": { "type": "string", "description": "Contact phone number." },
+        "usimStock": { "type": "integer", "description": "Current number of USIM cards in stock." },
+        "waitingCount": { "type": "integer", "description": "Current number of customers waiting for service." },
+        "lat": { "type": "number", "description": "Latitude coordinate of the store." },
+        "lng": { "type": "number", "description": "Longitude coordinate of the store." }
+      },
+      "required": ["id", "name", "address", "businessHours", "phoneNumber", "usimStock", "waitingCount", "lat", "lng"]
+    },
+    "Notice": {
+      "title": "Notice",
+      "description": "Announcements and notices for customers.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the notice." },
+        "title": { "type": "string", "description": "Title of the notice." },
+        "content": { "type": "string", "description": "Content of the notice." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp." },
+        "author": { "type": "string", "description": "Author of the notice." }
+      },
+      "required": ["id", "title", "content", "createdAt", "author"]
+    }
+  },
+  "firestore": {
+    "/stores/{storeId}": {
+      "schema": "Store",
+      "description": "Collection of LG U+ stores and their real-time status."
+    },
+    "/notices/{noticeId}": {
+      "schema": "Notice",
+      "description": "Collection of announcements and notices."
+    }
+  }
+}
