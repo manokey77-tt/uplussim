@@ -515,6 +515,29 @@ export default function App() {
                     <Download size={18} />
                     샘플
                   </button>
+                  <button 
+                    onClick={() => {
+                      const dataToExport = stores.map(store => ({
+                        '매장명': store.name,
+                        '주소': store.address,
+                        '영업시간': store.businessHours,
+                        '전화번호': store.phoneNumber,
+                        '유심 재고': store.usimStock,
+                        '대기 고객': store.waitingCount,
+                        '위도': store.lat,
+                        '경도': store.lng
+                      }));
+                      const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+                      const workbook = XLSX.utils.book_new();
+                      XLSX.utils.book_append_sheet(workbook, worksheet, "매장현황");
+                      XLSX.writeFile(workbook, `uplus_stores_status_${new Date().toISOString().split('T')[0]}.xlsx`);
+                    }}
+                    className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-green-600 rounded-xl hover:bg-green-700 transition-colors shadow-sm"
+                    title="현재 매장 현황 다운로드"
+                  >
+                    <Download size={18} />
+                    전체 다운로드
+                  </button>
                   <label className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer">
                     <FileUp size={18} />
                     <span className="hidden sm:inline">엑셀 업로드</span>
