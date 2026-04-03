@@ -59,7 +59,8 @@ service cloud.firestore {
              data.usimStock is int && data.usimStock >= 0 &&
              data.waitingCount is int && data.waitingCount >= 0 &&
              data.lat is number &&
-             data.lng is number;
+             data.lng is number &&
+             data.distance is number;
     }
 
     function isValidNotice(data) {
@@ -76,13 +77,13 @@ service cloud.firestore {
 
       // Admin only write access
       allow create: if isAdmin() && 
-                      hasRequiredFields(['id', 'name', 'address', 'businessHours', 'phoneNumber', 'usimStock', 'waitingCount', 'lat', 'lng']) &&
-                      hasOnlyAllowedFields(['id', 'name', 'address', 'businessHours', 'phoneNumber', 'usimStock', 'waitingCount', 'lat', 'lng']) &&
+                      hasRequiredFields(['id', 'name', 'address', 'businessHours', 'phoneNumber', 'usimStock', 'waitingCount', 'lat', 'lng', 'distance']) &&
+                      hasOnlyAllowedFields(['id', 'name', 'address', 'businessHours', 'phoneNumber', 'usimStock', 'waitingCount', 'lat', 'lng', 'distance']) &&
                       isValidStore(request.resource.data);
       
       allow update: if isAdmin() && 
-                      hasRequiredFields(['id', 'name', 'address', 'businessHours', 'phoneNumber', 'usimStock', 'waitingCount', 'lat', 'lng']) &&
-                      hasOnlyAllowedFields(['id', 'name', 'address', 'businessHours', 'phoneNumber', 'usimStock', 'waitingCount', 'lat', 'lng']) &&
+                      hasRequiredFields(['id', 'name', 'address', 'businessHours', 'phoneNumber', 'usimStock', 'waitingCount', 'lat', 'lng', 'distance']) &&
+                      hasOnlyAllowedFields(['id', 'name', 'address', 'businessHours', 'phoneNumber', 'usimStock', 'waitingCount', 'lat', 'lng', 'distance']) &&
                       isValidStore(request.resource.data);
       
       allow delete: if isAdmin();

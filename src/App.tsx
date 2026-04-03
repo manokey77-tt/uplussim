@@ -377,25 +377,55 @@ export default function App() {
       const worksheet = workbook.Sheets[sheetName];
       const jsonData = XLSX.utils.sheet_to_json(worksheet) as any[];
 
-      const newStoresFromExcel: Store[] = jsonData.map((row, index) => ({
-        id: `excel-${Date.now()}-${index}`,
-        name: row['매장명'] || row['name'] || '새 매장',
-        address: row['주소'] || row['address'] || '',
-        businessHours: row['영업시간'] || row['businessHours'] || '10:00 - 20:00',
-        phoneNumber: row['전화번호'] || row['phoneNumber'] || '',
-        usimStock: parseInt(row['유심 재고'] || row['usimStock']) || 0,
-        waitingCount: parseInt(row['대기 고객'] || row['waitingCount']) || 0,
-        lat: parseFloat(row['lat'] || row['위도']) || 37.5,
-        lng: parseFloat(row['lng'] || row['경도']) || 127.0,
-        distance: 0
-      }));
+      const newStoresFromExcel: Store[] = jsonData.map((row, index) => {
+        const latVal = parseFloat(row['lat'] || row['위도']);
+        const lngVal = parseFloat(row['lng'] || row['경도']);
+        
+        return {
+          id: `excel-${Date.now()}-${index}`,
+          name: String(row['매장명'] || row['name'] || '새 매장'),
+          address: String(row['주소'] || row['address'] || ''),
+          businessHours: String(row['영업시간'] || row['businessHours'] || '10:00 - 20:00'),
+          phoneNumber: String(row['전화번호'] || row['phoneNumber'] || ''),
+          usimStock: parseInt(row['유심 재고'] || row['usimStock']) || 0,
+          waitingCount: parseInt(row['대기 고객'] || row['waitingCount']) || 0,
+          lat: isNaN(latVal) ? 37.5 : latVal,
+          lng: isNaN(lngVal) ? 127.0 : lngVal,
+          distance: 0
+        };
+      });
 
       if (newStoresFromExcel.length > 0) {
-        if (window.confirm(`${newStoresFromExcel.length}개의 매장 데이터를 추가하시겠습니까?`)) {
+        if (window.confirm(`${newStoresFromExcel.length}개의 매장 데이터를 추가하시겠습니까?\n(위도/경도가 없는 매장은 주소를 기반으로 자동 좌표 변환을 시도합니다.)`)) {
           try {
+            let successCount = 0;
+            const apiKey = (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY;
+
             for (const store of newStoresFromExcel) {
-              await setDoc(doc(db, 'stores', store.id), store);
+              let finalStore = { ...store };
+
+              // If lat/lng is missing or 0, try to geocode the address
+              if ((!store.lat || !store.lng || store.lat === 0 || store.lng === 0) && store.address && apiKey) {
+                try {
+                  const response = await fetch(
+                    `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(store.address)}&key=${apiKey}`
+                  );
+                  const data = await response.json();
+                  
+                  if (data.status === 'OK' && data.results[0]) {
+                    const { lat, lng } = data.results[0].geometry.location;
+                    finalStore.lat = lat;
+                    finalStore.lng = lng;
+                  }
+                } catch (geoError) {
+                  console.error(`Geocoding failed for store: ${store.name}`, geoError);
+                }
+              }
+
+              await setDoc(doc(db, 'stores', finalStore.id), finalStore);
+              successCount++;
             }
+            alert(`${successCount}개의 매장이 성공적으로 업로드되었습니다.`);
           } catch (error) {
             handleFirestoreError(error, OperationType.CREATE, 'stores/bulk');
           }
