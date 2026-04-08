@@ -116,6 +116,7 @@ export default function App() {
     content: ''
   });
   const [adminTab, setAdminTab] = useState<'stores' | 'notices'>('stores');
+  const [selectedStoreIds, setSelectedStoreIds] = useState<string[]>([]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -289,9 +290,54 @@ export default function App() {
     if (window.confirm('정말 이 매장을 삭제하시겠습니까?')) {
       try {
         await deleteDoc(doc(db, 'stores', id));
+        setSelectedStoreIds(prev => prev.filter(selectedId => selectedId !== id));
       } catch (error) {
         handleFirestoreError(error, OperationType.DELETE, `stores/${id}`);
       }
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedStoreIds.length === 0) return;
+    if (window.confirm(`선택한 ${selectedStoreIds.length}개의 매장을 삭제하시겠습니까?`)) {
+      try {
+        for (const id of selectedStoreIds) {
+          await deleteDoc(doc(db, 'stores', id));
+        }
+        setSelectedStoreIds([]);
+        alert('선택한 매장이 삭제되었습니다.');
+      } catch (error) {
+        handleFirestoreError(error, OperationType.DELETE, 'stores/bulk-delete');
+      }
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    if (stores.length === 0) return;
+    if (window.confirm('모든 매장 데이터를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
+      try {
+        for (const store of stores) {
+          await deleteDoc(doc(db, 'stores', store.id));
+        }
+        setSelectedStoreIds([]);
+        alert('모든 매장 데이터가 삭제되었습니다.');
+      } catch (error) {
+        handleFirestoreError(error, OperationType.DELETE, 'stores/delete-all');
+      }
+    }
+  };
+
+  const toggleSelectStore = (id: string) => {
+    setSelectedStoreIds(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedStoreIds.length === stores.length) {
+      setSelectedStoreIds([]);
+    } else {
+      setSelectedStoreIds(stores.map(s => s.id));
     }
   };
 
@@ -396,36 +442,50 @@ export default function App() {
       });
 
       if (newStoresFromExcel.length > 0) {
-        if (window.confirm(`${newStoresFromExcel.length}개의 매장 데이터를 추가하시겠습니까?\n(위도/경도가 없는 매장은 주소를 기반으로 자동 좌표 변환을 시도합니다.)`)) {
+        if (window.confirm(`${newStoresFromExcel.length}개의 매장 데이터를 추가하시겠습니까?\n(동일한 매장명이 존재할 경우 재고와 대기 고객 정보만 업데이트됩니다.)`)) {
           try {
             let successCount = 0;
+            let updateCount = 0;
             const apiKey = (import.meta as any).env.VITE_GOOGLE_MAPS_API_KEY;
 
             for (const store of newStoresFromExcel) {
-              let finalStore = { ...store };
+              // Check if store with same name already exists
+              const existingStore = stores.find(s => s.name === store.name);
 
-              // If lat/lng is missing or 0, try to geocode the address
-              if ((!store.lat || !store.lng || store.lat === 0 || store.lng === 0) && store.address && apiKey) {
-                try {
-                  const response = await fetch(
-                    `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(store.address)}&key=${apiKey}`
-                  );
-                  const data = await response.json();
-                  
-                  if (data.status === 'OK' && data.results[0]) {
-                    const { lat, lng } = data.results[0].geometry.location;
-                    finalStore.lat = lat;
-                    finalStore.lng = lng;
+              if (existingStore) {
+                // Update only stock and waiting count
+                await updateDoc(doc(db, 'stores', existingStore.id), {
+                  usimStock: store.usimStock,
+                  waitingCount: store.waitingCount
+                });
+                updateCount++;
+              } else {
+                // Create new store
+                let finalStore = { ...store };
+
+                // If lat/lng is missing or 0, try to geocode the address
+                if ((!store.lat || !store.lng || store.lat === 0 || store.lng === 0) && store.address && apiKey) {
+                  try {
+                    const response = await fetch(
+                      `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(store.address)}&key=${apiKey}`
+                    );
+                    const data = await response.json();
+                    
+                    if (data.status === 'OK' && data.results[0]) {
+                      const { lat, lng } = data.results[0].geometry.location;
+                      finalStore.lat = lat;
+                      finalStore.lng = lng;
+                    }
+                  } catch (geoError) {
+                    console.error(`Geocoding failed for store: ${store.name}`, geoError);
                   }
-                } catch (geoError) {
-                  console.error(`Geocoding failed for store: ${store.name}`, geoError);
                 }
-              }
 
-              await setDoc(doc(db, 'stores', finalStore.id), finalStore);
-              successCount++;
+                await setDoc(doc(db, 'stores', finalStore.id), finalStore);
+                successCount++;
+              }
             }
-            alert(`${successCount}개의 매장이 성공적으로 업로드되었습니다.`);
+            alert(`${successCount}개의 매장이 추가되었고, ${updateCount}개의 매장 정보가 업데이트되었습니다.`);
           } catch (error) {
             handleFirestoreError(error, OperationType.CREATE, 'stores/bulk');
           }
@@ -534,9 +594,23 @@ export default function App() {
         <main className="max-w-4xl mx-auto px-4 pt-6">
           {adminTab === 'stores' ? (
             <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
-              <div className="p-4 border-b border-gray-100 flex justify-between items-center">
-                <h2 className="font-bold">매장 목록</h2>
-                <div className="flex items-center gap-2">
+              <div className="p-4 border-b border-gray-100 flex flex-wrap gap-4 justify-between items-center bg-gray-50/50">
+                <div className="flex items-center gap-4">
+                  <h2 className="font-bold">매장 목록 ({stores.length})</h2>
+                  {selectedStoreIds.length > 0 && (
+                    <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2">
+                      <span className="text-sm font-medium text-uplus-pink">{selectedStoreIds.length}개 선택됨</span>
+                      <button 
+                        onClick={handleDeleteSelected}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-red-500 rounded-lg hover:bg-red-600 transition-colors shadow-sm"
+                      >
+                        <Trash2 size={14} />
+                        선택 삭제
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
                   <button 
                     onClick={downloadSampleExcel}
                     className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
@@ -586,6 +660,14 @@ export default function App() {
                 <table className="w-full text-left border-collapse min-w-[800px]">
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr>
+                      <th className="px-6 py-4 w-10">
+                        <input 
+                          type="checkbox" 
+                          className="w-4 h-4 rounded border-gray-300 text-uplus-pink focus:ring-uplus-pink cursor-pointer"
+                          checked={stores.length > 0 && selectedStoreIds.length === stores.length}
+                          onChange={toggleSelectAll}
+                        />
+                      </th>
                       <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">매장명 / 주소</th>
                       <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">영업시간</th>
                       <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">전화번호</th>
@@ -596,7 +678,15 @@ export default function App() {
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {stores.map(store => (
-                      <tr key={store.id} className="hover:bg-gray-50 transition-colors">
+                      <tr key={store.id} className={`hover:bg-gray-50 transition-colors ${selectedStoreIds.includes(store.id) ? 'bg-uplus-pink/5' : ''}`}>
+                        <td className="px-6 py-4">
+                          <input 
+                            type="checkbox" 
+                            className="w-4 h-4 rounded border-gray-300 text-uplus-pink focus:ring-uplus-pink cursor-pointer"
+                            checked={selectedStoreIds.includes(store.id)}
+                            onChange={() => toggleSelectStore(store.id)}
+                          />
+                        </td>
                         <td className="px-6 py-4">
                           <div className="font-bold text-gray-900">{store.name}</div>
                           <div className="text-[10px] text-gray-400 mt-0.5 max-w-[200px] truncate">{store.address}</div>
